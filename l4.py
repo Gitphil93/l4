@@ -248,8 +248,8 @@ def subdomain_enum(target_root_dir, target, skip_tools):
          
 
     run_cmd(f"cat combined_subs.txt | sort -u | dnsx -silent -retries 2 -o {dnsx_out}", cwd=target_root_dir, output_file="subdomains.txt", tool_name="dnsx", skip_tools=skip_tools)
-    if os.path.getsize(dnsx_out) == 0:
-    print("[!] No subdomains found, exiting.")
+        if os.path.getsize(dnsx_out) == 0:
+        print("[!] No subdomains found, exiting.")
     return None  
     return dnsx_out        
     
