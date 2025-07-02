@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/bin/bash
+
+source ~/recon-env/bin/activate
+python3 path/to/your_script.py "$@"
+
 import subprocess
 import argparse
 import os
