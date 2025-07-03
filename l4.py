@@ -1,5 +1,8 @@
 #!/bin/bash
 
+source ~/recon-env/bin/activate
+python3 path/to/your_script.py "$@"
+
 import subprocess
 import argparse
 import os
@@ -174,7 +177,7 @@ def passive_recon(target, skip_tools):
  
     run_cmd("cat urls_all.txt | grep '\\.js' | sort -u > js_files.txt", cwd=target_dir, output_file="js_files.txt", tool_name="js_filter", skip_tools=skip_tools)
     
-    run_cmd("python3 ~/Tools/LinkFinder/linkfinder.py -i js_files.txt -o cli > endpoints_from_js.txt", cwd=target_dir, output_file="endpoints_from_js.txt", tool_name="linkfinder", skip_tools=skip_tools)  
+    run_cmd("python3 ~/tools/LinkFinder/linkfinder.py -i js_files.txt -o cli > endpoints_from_js.txt", cwd=target_dir, output_file="endpoints_from_js.txt", tool_name="linkfinder", skip_tools=skip_tools)  
               
     run_cmd(f"katana -u https://{target} -jc -o katana_endpoints.txt", cwd=target_dir, output_file="katana_endpoints.txt", tool_name="katana", skip_tools=skip_tools)
     
@@ -182,7 +185,7 @@ def passive_recon(target, skip_tools):
 
     run_cmd("grep -Eoi '([a-z0-9_-]*key|token|secret)[=:][^&]+' urls_all.txt | tee secrets_in_urls.txt", cwd=target_dir, output_file="secrets_in_urls.txt", tool_name="secrets", skip_tools=skip_tools)
     
-    run_cmd("xargs -r -a js_files.txt -I@ curl -s @ > js_combined.js", cwd=target_dir, output_file="js_combined.js", tool_name="js_download", skip_tools=skip_tools)
+    run_cmd("xargs -r -a js_files.txt -I@ sh -c 'curl -sL --fail --max-time 10 "@" | grep -Pzo "(?s)^.*$"' >> js_combined.js || true", cwd=target_dir, output_file="js_combined.js", tool_name="js_download", skip_tools=skip_tools)
     
     run_cmd(r"grep -Ei 'localStorage|document\\.cookie|innerHTML|document\\.write|dangerouslySetInnerHTML|fetch\\(|XMLHttpRequest|feature[_-]?flags?|featureflag|experiment|admin|administrator' js_combined.js > js_issues.txt", cwd=target_dir, output_file="js_issues.txt", tool_name="js_issues", skip_tools=skip_tools)
     run_extra_tools(target_dir, skip_tools)
