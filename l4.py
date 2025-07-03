@@ -1,4 +1,8 @@
 #!/bin/bash
+
+source ~/recon-env/bin/activate
+python3 path/to/your_script.py "$@"
+
 import subprocess
 import argparse
 import os
@@ -156,12 +160,12 @@ def choose_stack_wordlists(tech_stack):
     return lists
 
 def passive_recon(target, skip_tools):
-    target_dir = f"l4-recon/{target}"
+    target_dir = f"l4-targets/{target}"
     os.makedirs(target_dir, exist_ok=True)
     notify_discord(f"[L4 Recon] Starting passive recon at {datetime.now()}")
-    run_cmd(f"gau {target} | tee urls_raw.txt", cwd=target_dir, output_file="urls_raw.txt", tool_name="gau", skip_tools=skip_tools)
+    run_cmd(f"gau {target} > urls_raw.txt", cwd=target_dir, output_file="urls_raw.txt", tool_name="gau", skip_tools=skip_tools)
     run_cmd(f"waybackurls {target} >> urls_raw.txt", cwd=target_dir, output_file="urls_raw.txt", tool_name="waybackurls", skip_tools=skip_tools)
-    run_cmd("sort -u urls_raw.txt > urls_all.txt", cwd=target_dir, output_file="urls_all.txt", tool_name="sort", skip_tools=skip_tools)
+    run_cmd("LC_ALL=C sort -u urls_raw.txt > urls_all.txt", cwd=target_dir, output_file="urls_all.txt", tool_name="sort", skip_tools=skip_tools)
     run_cmd("cat urls_all.txt | grep '=' | grep -vE '\\.(jpg|jpeg|png|gif|svg|css|js|woff|ico)(\\?|$)' | grep -v '#' | grep -Ev '[\\{\\}\\[\\]<>\\|]' | grep -E '^https?://' | sort -u > urls_with_params.txt", cwd=target_dir, output_file="urls_with_params.txt", tool_name="param_filter", skip_tools=skip_tools)
     run_cmd("cat urls_with_params.txt | tr -cd '\\11\\12\\15\\40-\\176' | sed -E 's/([?&][^=&#]+)=?[^&#]*/\\1=VAR/g' | sort -u > urls_normalized.txt", cwd=target_dir, output_file="urls_normalized.txt", tool_name="normalize", skip_tools=skip_tools)
     
@@ -171,18 +175,24 @@ def passive_recon(target, skip_tools):
     target
 )            
  
-    run_cmd("cat urls_deduplicated.txt | grep '\\.js' | sort -u > js_files.txt", cwd=target_dir, output_file="js_files.txt", tool_name="js_filter", skip_tools=skip_tools)
-    run_cmd("cat js_files.txt | xargs -I@ curl -s @ | linkfinder -i stdin -o cli > endpoints_from_js.txt", cwd=target_dir, output_file="endpoints_from_js.txt", tool_name="linkfinder", skip_tools=skip_tools)            
-    run_cmd("katana -list urls_deduplicated.txt -jc -o katana_endpoints.txt", cwd=target_dir, output_file="katana_endpoints.txt", tool_name="katana", skip_tools=skip_tools)
-   
-    run_cmd("dalfox file urls_deduplicated.txt --only-poc r -o xss_results.txt", cwd=target_dir, output_file="xss_results.txt", tool_name="dalfox", skip_tools=skip_tools)
-    run_cmd("nuclei -l urls_deduplicated.txt -headless -iserver https://server-two-rho.vercel.app -o nuclei_results.txt", cwd=target_dir, output_file="nuclei_results.txt", tool_name="nuclei", skip_tools=skip_tools)
-    run_cmd("cat urls_all.txt | httpx -silent -status-code -title -tech-detect -web-server -o headers_scan.txt", cwd=target_dir, output_file="headers_scan.txt", tool_name="httpx", skip_tools=skip_tools)
+    run_cmd("cat urls_all.txt | grep '\\.js' | sort -u > js_files.txt", cwd=target_dir, output_file="js_files.txt", tool_name="js_filter", skip_tools=skip_tools)
+    
+    run_cmd("python3 ~/Tools/LinkFinder/linkfinder.py -i js_files.txt -o cli > endpoints_from_js.txt", cwd=target_dir, output_file="endpoints_from_js.txt", tool_name="linkfinder", skip_tools=skip_tools)  
+              
+    run_cmd(f"katana -u https://{target} -jc -o katana_endpoints.txt", cwd=target_dir, output_file="katana_endpoints.txt", tool_name="katana", skip_tools=skip_tools)
+    
+        run_cmd("grep -Ei '([?&](redirect|url|next|return|dest|destination|continue|callback|to|goto))=' urls_all.txt | tee potential_redirects.txt", cwd=target_dir, output_file="potential_redirects.txt", tool_name="redirect", skip_tools=skip_tools)
 
     run_cmd("grep -Eoi '([a-z0-9_-]*key|token|secret)[=:][^&]+' urls_all.txt | tee secrets_in_urls.txt", cwd=target_dir, output_file="secrets_in_urls.txt", tool_name="secrets", skip_tools=skip_tools)
-    run_cmd("cat js_files.txt | xargs -I@ curl -s @ > js_combined.js", cwd=target_dir, output_file="js_combined.js", tool_name="js_download", skip_tools=skip_tools)
+    
+    run_cmd("xargs -r -a js_files.txt -I@ curl -s @ > js_combined.js", cwd=target_dir, output_file="js_combined.js", tool_name="js_download", skip_tools=skip_tools)
+    
     run_cmd(r"grep -Ei 'localStorage|document\\.cookie|innerHTML|document\\.write|dangerouslySetInnerHTML|fetch\\(|XMLHttpRequest|feature[_-]?flags?|featureflag|experiment|admin|administrator' js_combined.js > js_issues.txt", cwd=target_dir, output_file="js_issues.txt", tool_name="js_issues", skip_tools=skip_tools)
     run_extra_tools(target_dir, skip_tools)
+    
+    run_cmd("dalfox file urls_deduplicated.txt --only-poc r -o xss_results.txt", cwd=target_dir, output_file="xss_results.txt", tool_name="dalfox", skip_tools=skip_tools)
+    
+    run_cmd("nuclei -l urls_deduplicated.txt -headless -iserver https://server-two-rho.vercel.app -o nuclei_results.txt", cwd=target_dir, output_file="nuclei_results.txt", tool_name="nuclei", skip_tools=skip_tools)
     
 def deduplicate_similar_urls(input_file, output_file, target):
     seen_templates = set()
@@ -203,7 +213,7 @@ def deduplicate_similar_urls(input_file, output_file, target):
     #notify_discord(f"[L4 Recon] Passive recon finished for {target} at {datetime.now()}")
     
 async def run_full_recon(sub, args, skip_tools):
-    target_dir = f"l4-recon/{sub}"
+    target_dir = f"l4-targets/{sub}"
     os.makedirs(target_dir, exist_ok=True)
 
     passive_recon(sub, skip_tools)
@@ -211,8 +221,7 @@ async def run_full_recon(sub, args, skip_tools):
     default_lists = [
         os.path.expanduser("~/Documents/SecLists/Discovery/Web-Content/common.txt"),
         os.path.expanduser("~/Documents/SecLists/Discovery/Web-Content/raft-large-directories.txt"),
-        os.path.expanduser("~/Documents/SecLists/Discovery/Web-Content/raft-large-files.txt"),
-        os.path.expanduser("~/Documents/SecLists/Discovery/Web-Content/env.txt")
+        os.path.expanduser("~/Documents/SecLists/Discovery/Web-Content/raft-large-files.txt")
     ]
     tech_stack = detect_stack_with_wappalyzer(target_dir, skip_tools)
     tech_lists = choose_stack_wordlists(tech_stack)
@@ -249,8 +258,8 @@ def subdomain_enum(target_root_dir, target, skip_tools):
 
     run_cmd(f"cat combined_subs.txt | sort -u | dnsx -silent -retries 2 -o {dnsx_out}", cwd=target_root_dir, output_file="subdomains.txt", tool_name="dnsx", skip_tools=skip_tools)
     if os.path.getsize(dnsx_out) == 0:
-        print("[!] No subdomains found, exiting.")
-        return None  
+    print("[!] No subdomains found, exiting.")
+    return None  
     return dnsx_out        
     
 
@@ -281,7 +290,7 @@ async def main():
     args = parser.parse_args()
 
     skip_tools = set(args.skip.split(",")) if args.skip else set()
-    target_root_dir = f"l4-recon/{args.target.strip()}"
+    target_root_dir = f"l4-targets/{args.target.strip()}"
     os.makedirs(target_root_dir, exist_ok=True)
 
     if args.subdomains:
