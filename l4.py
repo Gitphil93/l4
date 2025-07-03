@@ -178,7 +178,7 @@ def passive_recon(target, skip_tools):
               
     run_cmd(f"katana -u https://{target} -jc -o katana_endpoints.txt", cwd=target_dir, output_file="katana_endpoints.txt", tool_name="katana", skip_tools=skip_tools)
     
-        run_cmd("grep -Ei '([?&](redirect|url|next|return|dest|destination|continue|callback|to|goto))=' urls_all.txt | tee potential_redirects.txt", cwd=target_dir, output_file="potential_redirects.txt", tool_name="redirect", skip_tools=skip_tools)
+    run_cmd("grep -Ei '([?&](redirect|url|next|return|dest|destination|continue|callback|to|goto))=' urls_all.txt | tee potential_redirects.txt", cwd=target_dir, output_file="potential_redirects.txt", tool_name="redirect", skip_tools=skip_tools)
 
     run_cmd("grep -Eoi '([a-z0-9_-]*key|token|secret)[=:][^&]+' urls_all.txt | tee secrets_in_urls.txt", cwd=target_dir, output_file="secrets_in_urls.txt", tool_name="secrets", skip_tools=skip_tools)
     
